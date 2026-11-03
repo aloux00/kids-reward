@@ -1,0 +1,125 @@
+# 星星成长记 · 生产编排
+#
+#   docker compose up -d              启动（首次会自动构建镜像）
+#   docker compose logs -f            看日志
+#   docker compose down               停止（数据在挂载卷里，不会丢）
+#   docker compose up -d --build      改完后端代码后重新构建并重启
+#
+# 改代码到底要不要 rebuild，看 deploy/docker/README.md 里的对照表。
+# 想改完代码不重建镜像，用 docker-compose.dev.yml。
+
+services:
+  kids:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: kids-reward:latest
+    container_name: kids-reward
+    restart: unless-stopped
+
+    ports:
+      # 左边是宿主机端口，冲突了改这个（或设环境变量 KIDS_HOST_PORT）；
+      # 右边是容器内端口，固定 8777，不要动
+      - "${KIDS_HOST_PORT:-8777}:8777"
+
+    environment:
+      TZ: Asia/Shanghai
+      KIDS_PORT: "8777"
+      KIDS_DATA_DIR: /app/data
+      KIDS_UPLOAD_DIR: /app/uploads
+      KIDS_RULES_PATH: /app/rules.yaml
+      # 前面有 nginx / Caddy / Cloudflare Tunnel 时改成 "1"。
+      # 不开的话所有访客的 IP 都会被记成 127.0.0.1，
+      # 登录失败限流会按同一个 IP 累加，很容易把全家人都锁在外面。
+      KIDS_PROXY: "${KIDS_PROXY:-0}"
+      # 设成 0 可以跳过演示数据初始化（只在数据库文件不存在时才有效）
+      KIDS_SEED: "${KIDS_SEED:-auto}"
+
+    volumes:
+      # 这三条是唯一需要备份的东西，重建镜像、升级代码都不影响它们。
+      #
+      # 左边（宿主机路径）可以用环境变量改，右边（容器内路径）不要动。
+      # 默认值是相对路径，也就是"数据就放在项目目录里"——本机、单机部署都够用。
+      #
+      # 什么时候需要改：服务器上代码用 git 管理，数据不想放在仓库目录里。
+      # 因为 parent 端会写回 rules.yaml，数据库也一直在变，
+      # 放在仓库目录里会让 git 工作区永远是脏的，pull 时容易冲突。
+      # 这时在 .env 里写 KIDS_HOST_DATA=/srv/star-kids/data 即可，
+      # 代码归代码、数据归数据，互不干扰。详见 docs/GIT.md 第三节。
+      - "${KIDS_HOST_DATA:-./data}:/app/data"
+      - "${KIDS_HOST_UPLOADS:-./uploads}:/app/uploads"
+      - "${KIDS_HOST_RULES:-./rules.yaml}:/app/rules.yaml"
+
+    # SQLite 跑在 WAL 模式，给足优雅退出的时间，避免留下半截 -wal 文件
+    stop_grace_period: 20s
+
+    # ---------------------------------------------------------------- 自动更新
+    # 这整块只在 `docker compose watch` 时生效，普通 `up -d` 完全不读它。
+    # 原则：按"改了什么"决定"要做到哪一步"，能少动就少动。
+    #
+    #   sync          只把文件同步进容器，进程不动 → 改前端样式/文案，刷新浏览器就行
+    #   sync+restart  同步后重启容器 → 改 Python 代码，约 1~2 秒
+    #   rebuild       真的重新构建镜像 → 改依赖或镜像定义，唯一躲不掉 build 的情况
+    #
+    # 什么时候用这块：跑生产镜像（自包含、不挂源码）时想临时改点东西。
+    # 日常开发/长期自用不要用 watch，直接上 docker-compose.dev.yml ——
+    # 那边是源码挂载 + 容器内 --reload，零外部进程，比 watch 可靠得多。
+    #
+    # 注意：这里同步进去的文件写在容器的可写层上，`docker compose up` 重建容器后就没了，
+    # watch 正在跑的话会重新同步一次，不用管。
+    develop:
+      watch:
+        # ① 前端资源：不重启。孩子正在做题时也不会被打断。
+        - action: sync
+          path: ./static
+          target: /app/static
+
+        # ② 后端代码：同步 + 重启。uvicorn 没有 --reload，必须重启进程才会加载新代码。
+        - action: sync+restart
+          path: ./app
+          target: /app/app
+          ignore:
+            - __pycache__
+            - "*.pyc"
+
+        # ③ 启动入口：改了要重启才生效
+        - action: sync+restart
+          path: ./run.py
+          target: /app/run.py
+
+        # ④ 这几样变了，光同步没用，必须重建镜像
+        - action: rebuild
+          path: ./requirements.txt
+        - action: rebuild
+          path: ./docker/Dockerfile
+        - action: rebuild
+          path: ./docker/entrypoint.sh
+
+        # ⑤ 自检脚本与工具：只同步。改完直接在容器里跑体检，用的就是新脚本。
+        - action: sync
+          path: ./tools
+          target: /app/tools
+        - action: sync
+          path: ./seed.py
+          target: /app/seed.py
+        - action: sync
+          path: ./smoke_test.py
+          target: /app/smoke_test.py
+        - action: sync
+          path: ./smoke_test_extra.py
+          target: /app/smoke_test_extra.py
+        - action: sync
+          path: ./smoke_test_extra2.py
+          target: /app/smoke_test_extra2.py
+        - action: sync
+          path: ./smoke_test_extra3.py
+          target: /app/smoke_test_extra3.py
+
+    # rules.yaml 故意不放进 watch：它本来就是 bind mount，而且家长端在网页上改规则时
+    # 会写回这个文件。如果 watch 把它当"源码变化"同步，会和运行时写入打架。
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

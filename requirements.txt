@@ -1,0 +1,7 @@
+fastapi==0.162.0
+uvicorn
+sqlalchemy
+pyyaml
+# ruamel.yaml 用于 round-trip 写回 rules.yaml，保留其中的中文注释
+ruamel.yaml
+python-multipart

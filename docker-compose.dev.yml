@@ -1,0 +1,33 @@
+# 星星成长记 · 本机开发编排（叠加在生产配置之上）
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#   （或者直接双击 start-docker.bat，它默认就用这一套）
+#
+# 和生产编排的唯一区别：源码目录也挂进容器，并开启 uvicorn 自动重载。
+# 改 app/*.py 之后容器内进程自己重载，不用重建镜像、不用重启容器 ——
+# 这一点直接回答了"用了 Docker 以后改代码会不会变麻烦"。
+#
+# 效果：
+#   改 static/      → 刷新浏览器就生效（挂载，零延迟）
+#   改 app/         → 1 秒内自动重载，容器不重启，数据连接不断
+#   改依赖/镜像定义 → 必须重建，见 README 第三节
+#
+# 注意：这条只适合自己开发/长期自用。正式部署到服务器请走生产编排，
+# 否则代码目录一乱、容器就跑出莫名其妙的错。
+
+services:
+  kids:
+    volumes:
+      # 数据卷（同生产）
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./rules.yaml:/app/rules.yaml
+      # 源码卷：改完立刻生效，镜像里那份代码被覆盖，永远不会跑旧版本
+      - ./app:/app/app
+      - ./static:/app/static
+
+    environment:
+      # 只做一件事：让 entrypoint 给 run.py 多加一个 --reload。
+      # 有意不覆盖 command —— entrypoint 里那套挂载检查（rules.yaml 被建成目录、
+      # 目录属主不对）在开发模式下同样需要，不该因为"开发"就绕过。
+      KIDS_RELOAD: "1"

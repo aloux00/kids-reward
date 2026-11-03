@@ -1,0 +1,24 @@
+# 隧道配置文件示例（命令行模式用）
+
+# 如果你是在 Cloudflare 网页控制台建的隧道，这个文件是不生效的，
+# 路由以控制台为准 —— 二选一，不要混用。
+
+tunnel: home-kids
+credentials-file: /root/.cloudflared/<隧道UUID>.json
+
+# 可选：调整连接稳定性
+# originRequest:
+#   connectTimeout: 30s
+#   noTLSVerify: false
+
+ingress:
+  # 主域名 —— 指向本机运行的星星成长记
+  - hostname: kids.CHANGE-ME.com
+    service: http://127.0.0.1:8777
+
+  # 例子：同一条隧道还能顺便映射家里别的服务，不需要额外开端口
+  # - hostname: nas.CHANGE-ME.com
+  #   service: http://127.0.0.1:5000
+
+  # 兜底规则必须保留，且必须是最后一条，否则 cloudflared 拒绝启动
+  - service: http_status:404

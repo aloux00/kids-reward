@@ -1,0 +1,57 @@
+# ============================================================
+#  换行符策略 —— 这个文件不是可有可无的装饰
+#
+#  背景：这个项目在 Windows 上开发，最终却要跑在 Linux 服务器上。
+#  如果不统一换行符，仓库里存的就是 CRLF，Linux 上 clone 下来之后：
+#
+#      $ sudo bash deploy/linux/install.sh
+#      install.sh: line 12: $'\r': command not found
+#
+#  报错信息完全看不出是换行符问题，能排查很久。所以：
+#    · 文本文件在仓库里一律存 LF
+#    · .bat 例外，必须 CRLF（cmd.exe 对 LF 的 .bat 处理不可靠，尤其是 goto/label）
+#    · 字体、图片、PDF 等二进制不做任何转换
+#
+#  规则写在仓库里而不是靠每个人本地配 core.autocrlf：
+#  本地配置只影响自己这台机器，写进 .gitattributes 才对新克隆的机器生效。
+# ============================================================
+
+# 默认：自动识别文本，统一存 LF
+* text=auto eol=lf
+
+# 明确按文本处理
+*.py      text eol=lf
+*.sh      text eol=lf
+*.js      text eol=lf
+*.mjs     text eol=lf
+*.css     text eol=lf
+*.html    text eol=lf
+*.json    text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.md      text eol=lf
+*.txt     text eol=lf
+*.ini     text eol=lf
+*.env     text eol=lf
+
+# Windows 批处理必须是 CRLF
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+
+# 二进制：禁止任何转换，否则会悄悄损坏文件
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.webp    binary
+*.pdf     binary
+*.woff    binary
+*.woff2   binary
+*.ttf     binary
+*.otf     binary
+*.pfb     binary
+*.bcmap   binary
+*.zip     binary
+*.gz      binary
+*.db      binary

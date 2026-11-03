@@ -1,0 +1,48 @@
+# 构建上下文排除清单 —— 这个文件直接决定镜像大小和构建速度。
+#
+# 最关键的三行是 data/ backups/ uploads/：
+# 它们可能有几百 MB，一旦进上下文，每次 build 都要拷一遍，
+# 更糟的是真实数据会被烤进镜像，重建容器后新旧数据容易混淆。
+
+# 运行期数据（通过 volume 挂载，不进镜像）
+data/
+backups/
+uploads/
+
+# Python 缓存
+# 注意：Docker 的 .dockerignore 里不带斜杠的模式只匹配根目录，
+# 想覆盖 app/ 这种子目录必须写 **/xxx（** 表示任意层级，含零层）
+__pycache__/
+**/__pycache__/
+*.py[cod]
+**/*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 本地小工具、Windows 脚本（容器里用不到）
+# 注意：smoke_test*.py 不能排除。它们要用 sqlite3 直接读写 data/kids.db 做前置数据，
+# 必须在容器内运行才准（见 Dockerfile 里的说明），所以得打进镜像。
+make_icons.py
+*.bat
+*.vbs
+
+# 后台同步脚本写的日志
+logs/
+
+# 文档与部署说明
+docs/
+deploy/
+*.md
+
+# 版本控制 / 系统垃圾
+.git/
+.gitignore
+.dockerignore
+.DS_Store
+Thumbs.db
+*.log
+
+# 其它编排文件（避免把自身塞进上下文）
+docker-compose*.yml

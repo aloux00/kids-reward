@@ -1,0 +1,180 @@
+# ============================================================
+#  全部积分与等级规则集中于此
+#  网页端（家长 > 规则）可以直接编辑并保存，保存后即时生效，无需重启服务。
+# ============================================================
+version: 1
+
+app:                            # 左上角名字、标题栏与登录页文案，随时可改
+  name: 星星成长记
+  subtitle: 让好习惯看得见
+  logo: ⭐
+
+currency:
+  coin_name: 星星币
+  exp_name: 成长值
+
+daily_cap:                      # 每日各类得分上限，超出部分只记录不给分
+  study: 40
+  exercise: 20
+  chore: 15
+  habit: 10
+  game: 15
+  garden: 8                     # 花园单独一类：它的收益必须远低于好好打卡
+
+streak_bonus:                   # 连续打卡额外奖励（星星币与成长值同步增加）
+  3: 5
+  7: 20
+  14: 50
+  30: 150
+  100: 800
+streak_shield_per_month: 1      # 每月 1 次断签保护
+
+levels:                         # 成长值等级、称号与解锁特权
+- {level: 1, title: 启程星, exp: 0, perk: 许下第一个愿望}
+- {level: 2, title: 好奇星, exp: 100, perk: 自选一次睡前故事}
+- {level: 3, title: 坚持新星, exp: 300, perk: 决定一次周末活动}
+- {level: 4, title: 勤学星, exp: 700, perk: 每日游戏时长加 5 分钟}
+- {level: 5, title: 毅力星, exp: 1300, perk: 每月一张家务免做券}
+- {level: 6, title: 智慧星, exp: 2200, perk: 决定一次家庭晚餐}
+- {level: 7, title: 领航星, exp: 3500, perk: 专属荣誉证书可打印}
+- {level: 8, title: 卓越星, exp: 5500, perk: 一次单独出游日}
+- {level: 9, title: 璀璨星, exp: 8500, perk: 家庭荣誉墙专属展位}
+- {level: 10, title: 传奇星, exp: 13000, perk: 担任一天家庭小管家}
+
+task_defaults:                  # 初始任务库，家长可在界面增删
+- {name: 完成一门作业, category: study, points: 5, freq: daily, need_approval: true}
+- {name: 阅读 30 分钟, category: study, points: 8, freq: daily, need_approval: true}
+- {name: 口算练习一页, category: study, points: 4, freq: daily, need_approval: true}
+- {name: 跳绳 300 个, category: exercise, points: 6, freq: daily, need_photo: true}
+- {name: 户外活动 1 小时, category: exercise, points: 8, freq: daily}
+- {name: 整理自己的房间, category: chore, points: 5, freq: daily, need_photo: true}
+- {name: 洗碗, category: chore, points: 4, freq: daily}
+- {name: 主动学习不提醒, category: habit, points: 5, freq: daily}
+- {name: 按时起床, category: habit, points: 3, freq: daily}
+
+gating:
+  game_unlock_after_study: true   # 完成当日学习类任务后才解锁小游戏
+  game_daily_play_limit: 3        # 每日最多玩 3 局
+
+application:                    # 孩子主动申报加分（"我今天还想加分"）
+  enabled: true
+  daily_limit: 2                # 每日最多申请 2 次
+  max_points_per_apply: 10      # 单次最多 10 分，家长审批只能下修、不能突破
+  require_evidence: true        # 必须提交照片或文字佐证
+  count_into_daily_cap: true    # 计入当日总上限，绝不能成为绕过上限的后门
+  expire_days: 30               # 超期未审批自动作废
+
+age_modes:                      # 界面模式按年龄推荐，家长与孩子均可手动切换
+  childish: {min_age: 0, max_age: 8}
+  normal: {min_age: 9, max_age: 12}
+  plain: {min_age: 13, max_age: 99}
+
+redemption:
+  auto_approve_below: 0           # 0 表示全部兑换都需家长确认
+
+# ---------------- 小游戏注册表（P1 内置速算闯关） ----------------
+games:
+- code: math
+  name: 速算闯关
+  icon: "🧠"
+  desc: 60 秒内算得越多分越高，每天最多 3 局
+  enabled: true
+  questions: 10                 # 每局题量
+  points_per_correct: 1         # 每答对 1 题得 1 星
+  clear_bonus: 2                # 全部答对额外奖励
+  time_limit: 90                # 秒
+  ops: ["+", "-"]               # 一年级难度：加减法
+  range_max: 20
+
+# ---------------------------------------------------------------------------
+# 错题本
+# 做错的题自动收录，孩子改对才算「已掌握」。
+# 奖励刻意压得很低：目的是让练习真的产生学习价值，而不是变成新的刷分渠道。
+# ---------------------------------------------------------------------------
+wrong_book:
+  enabled: true
+  review_batch_size: 8          # 一次复习最多出几道（太多会让 7 岁孩子烦躁）
+  review_all_correct_points: 2  # 一组全部改对才给的分；不单独给每题计分
+  # 注意：订正奖励计入 daily_cap.study，不需要额外的上限参数 ——
+  # 一旦奖励值开得比正常打卡还高，孩子就会发现「故意做错再订正」更划算。
+  subjects:                     # 科目由家长维护（管理 → 错题科目），删掉会带上已有错题
+  - {code: math, name: 数学, icon: 🔢}
+  - {code: chinese, name: 语文, icon: 📖}
+  - {code: english, name: 英语, icon: 🔤}
+  - {code: science, name: 科学, icon: 🔬}
+  - {code: other, name: 其它, icon: 📌}
+garden:
+  enabled: true
+  category: garden              # 收益计入哪一类上限（daily_cap.garden）
+  slots_base: 2                 # 初始地块
+  slots_unlock_step: 2          # 每 2 级多一块地
+  max_slots: 6
+  water_cooldown_min: 30        # 两次浇水的最短间隔，急也急不来
+  water_needed: 4               # 默认需要浇几次才熟
+  wither_hours: 72              # 超过这么久没浇水会打蔫（浇回来就恢复，不惩罚）
+  dead_hours: 168               # 一周完全不管才提示一句，依然照常收
+  yield_rate: 1.2               # 收成 = 种子价 × 倍率；别超过 1.3，否则本末倒置
+  plants:
+  - {code: sunflower, name: 向日葵, emoji: "🌻", mid_emoji: "🌿", seed_cost: 10, 
+      water_needed: 4, desc: 最好养，适合第一次种}
+  - {code: tomato, name: 西红柿, emoji: "🍅", mid_emoji: "🌿", seed_cost: 14, 
+      water_needed: 4, desc: 稳稳的第二种选择}
+  - {code: strawberry, name: 草莓, emoji: "🍓", mid_emoji: "🌿", seed_cost: 18, 
+      water_needed: 5, desc: 多浇一次水，多一点点收成}
+  - {code: pumpkin, name: 南瓜, emoji: "🎃", mid_emoji: "🌿", seed_cost: 30, 
+      water_needed: 6, desc: 最贵也最慢，教孩子学会取舍}
+
+# ---------------------------------------------------------------------------
+# 番茄钟 / 专注计时
+# 时长由服务端按真实时间差判定 —— 前端报多少秒一律不采信。
+# ---------------------------------------------------------------------------
+pomodoro:
+  enabled: true
+  category: study               # 番茄钟就是学习活动，跟着学习上限走
+  daily_limit: 4                # 每天最多 4 个番茄
+  minutes_options: [10, 15, 20, 25]
+  default_minutes: 15           # 7 岁起步建议 15 分钟，别一上来 25
+  points_per_pomodoro: 2
+  min_ratio: 0.9                # 实际时长不足计划的 90% 判无效（不扣分）
+  grace_minutes: 5              # 超过计划 5 分钟以上说明中途跑开了，同样无效
+  bonus_at: 4                   # 当天第 4 个额外奖励
+  bonus_points: 3
+
+# ---------------------------------------------------------------------------
+# 每日识字 + 识字闯关
+# 词库全部内置在本机（app/content/words.py），不联网、不需要 API Key。
+# ---------------------------------------------------------------------------
+words:
+  enabled: true
+  new_per_day: 6                # 每天推几个新字；6 个一年就是两千多个
+  daily_round_limit: 3          # 识字闯关每天最多几局
+  questions: 8
+  points_per_correct: 1
+  clear_bonus: 2
+  use_hanzi: true
+  use_english: true             # 关掉就只剩汉字，适合还没开英语课的孩子
+
+# ---------------------------------------------------------------------------
+# 宠物养成（纯矢量绘制，不引入任何图片包）
+# 关键设定：宠物等级跟着孩子的成长值走，喂东西是喂不大的。
+# ---------------------------------------------------------------------------
+pet:
+  enabled: true
+  adopt_cost: 0                 # 建议保持 0：领养不该有门槛
+  feed_cost: 2                  # 喂食要花星星币，让「照顾」变成一个真实的选择
+  max_feed_per_day: 3
+  feed_mood_gain: 8
+  play_cost: 0                  # 陪伴不收钱
+  max_play_per_day: 3
+  play_mood_gain: 10
+  mood_decay_per_day: 10        # 一整天不理它掉的心情值
+  mood_floor: 35                # 心情下限：会闷闷的，但绝不会有惩罚、不会离开
+  stage_by_exp: [0, 100, 400, 1000, 2500]   # 蛋 / 幼崽 / 少年 / 守护兽 / 传说
+
+# ---------------------------------------------------------------------------
+# 家长学堂与家庭共学
+# 这部分不产生任何星星币 —— 家长的付出不该被孩子货币化。
+# ---------------------------------------------------------------------------
+parent_school:
+  enabled: true
+  weekly_goal_minutes: 150      # 每周陪伴目标，只是个参照，没做到也不会扣什么
