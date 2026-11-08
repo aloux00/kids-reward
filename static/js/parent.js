@@ -189,6 +189,7 @@ const ParentViews = (() => {
               <div class="row" style="margin-top:10px;gap:8px">
                 <button class="btn r sm" data-act="p-wish-reject" data-id="${w.id}">不合适</button>
                 <button class="btn gold sm" data-act="p-wish-approve" data-id="${w.id}" data-cost="${w.cost}">${w.priced ? '确认并调整分值' : '⭐ 定星星币并确认'}</button>
+                <button class="btn ghost sm" data-act="p-wish-edit" data-id="${w.id}">编辑</button>
               </div>
             </div>`).join('')
         : `<div class="card">${empty('没有等待确认的愿望 👌')}</div>`}
@@ -203,10 +204,12 @@ const ParentViews = (() => {
             </div>
             ${statusTag(w.status)}
           </div>
-          ${w.status === 'active' ? `
           <div class="row" style="margin-top:9px;gap:8px">
-            <button class="btn ghost sm" data-act="p-wish-cost" data-id="${w.id}" data-cost="${w.cost}">⭐ 改星星币数量</button>
-          </div>` : ''}
+            ${w.status === 'active'
+              ? `<button class="btn ghost sm" data-act="p-wish-edit" data-id="${w.id}">✏️ 编辑</button>`
+              : ''}
+            <button class="btn r sm" data-act="p-wish-delete" data-id="${w.id}">🗑 删除</button>
+          </div>
         </div>`).join('') || `<div class="card">${empty('暂无')}</div>`}`;
   }
 
@@ -847,6 +850,55 @@ const ParentViews = (() => {
           App.load();
         }
       });
+    },
+
+    'p-wish-edit'(el) {
+      const id = +el.dataset.id;
+      const list = (App.state.parent.wishes && App.state.parent.wishes.wishes) || [];
+      const w = list.find(x => x.id === id) || {};
+      UI.sheet({
+        title: '编辑愿望',
+        body: `
+          <label class="f"><span>愿望标题</span><input id="peTitle" value="${UI.esc(w.title || '')}"></label>
+          <label class="f"><span>备注（可选）</span><textarea id="peNote">${UI.esc(w.note || '')}</textarea></label>
+          <div class="row spread">
+            <span class="small muted">配图（可选）</span>
+            <button class="btn ghost sm" data-act="wish-photo">📷 上传照片</button>
+          </div>
+          <div id="wPreview" style="margin-top:8px">${w.cover ? `<img src="${UI.esc(w.cover)}" style="width:100%;border-radius:12px">` : ''}</div>
+          <input type="hidden" id="wCover" value="${UI.esc(w.cover || '')}">
+          <label class="f" style="margin-top:10px"><span>目标日期（可选）</span><input id="peDate" type="date" value="${UI.esc(w.target_date || '')}"></label>
+          <label class="f" style="margin-top:10px"><span>需要星星币（0 表示先不定）</span><input id="peCost" type="number" value="${w.cost || 0}" min="0"></label>
+          <p class="small muted" style="margin-top:6px">星星币填大于 0 才会改价；填 0 表示保持现状。待确认的愿望一旦定价会自动通过。</p>`,
+        okText: '保存',
+        onOk: async (wrap) => {
+          const title = wrap.querySelector('#peTitle').value.trim();
+          if (!title) { UI.toast('标题不能为空', 'err'); return false; }
+          const cost = +wrap.querySelector('#peCost').value;
+          if (cost < 0) { UI.toast('星星币不能是负数', 'err'); return false; }
+          const cur = w.cost || 0;
+          try {
+            await API.patch('/api/parent/wish/' + id, {
+              title,
+              note: wrap.querySelector('#peNote').value.trim(),
+              cover_image: wrap.querySelector('#wCover').value,
+              target_date: wrap.querySelector('#peDate').value || null,
+              cost_coin: (cost > 0 && cost !== cur) ? cost : null
+            });
+            UI.toast('已保存');
+            App.load();
+          } catch (e) { UI.toast(e.message, 'err'); }
+        }
+      });
+    },
+
+    async 'p-wish-delete'(el) {
+      if (!await UI.confirm('删除这个愿望？', '删除后从列表彻底消失，已实现的也会一并移除（孩子的星星币余额不受影响）')) return;
+      try {
+        await API.del('/api/parent/wish/' + el.dataset.id);
+        UI.toast('已删除');
+        App.load();
+      } catch (e) { UI.toast(e.message, 'err'); }
     },
 
     /* ---------------- 其它 */

@@ -144,6 +144,7 @@ def wish_dto(db, wish: Wish, ps, available: int, avg7: float) -> dict:
         "gap": gap,
         "is_primary": wish.priority == 1,
         "status": wish.status,
+        "target_date": wish.target_date or "",
         "eta": eta,
         "eta_days": eta_days,
         "frozen_here": frozen_here,

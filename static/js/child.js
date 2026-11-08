@@ -132,6 +132,7 @@ const ChildViews = (() => {
           ${w.priced && w.gap === 0 && !doing && w.frozen_here === 0
             ? `<button class="btn gold sm" data-act="redeem" data-id="${w.id}">🎁 兑换</button>`
             : `<button class="btn ghost sm" data-act="wish-primary" data-id="${w.id}">${w.is_primary ? '当前主目标' : '设为主目标'}</button>`}
+          <button class="btn ghost sm" data-act="wish-edit" data-id="${w.id}">编辑</button>
           <button class="btn ghost sm" data-act="wish-drop" data-id="${w.id}">放弃</button>
         </div>
       </div>`;
@@ -211,6 +212,7 @@ const ChildViews = (() => {
           ${w.priced && w.gap === 0 && w.status === 'active' && w.frozen_here === 0
             ? `<button class="btn gold" data-act="redeem" data-id="${w.id}">🎁 兑换它</button>` : ''}
           ${w.is_primary ? '' : `<button class="btn ghost sm" data-act="wish-primary" data-id="${w.id}">设为主目标</button>`}
+          <button class="btn ghost sm" data-act="wish-edit" data-id="${w.id}">编辑</button>
           <button class="btn ghost sm" data-act="wish-drop" data-id="${w.id}">放弃</button>
         </div>
       </div>`;
@@ -1122,6 +1124,43 @@ const ChildViews = (() => {
       await API.del(`/api/child/wish/${el.dataset.id}`);
       UI.toast('已放弃，星星币还在账户里');
       App.load();
+    },
+
+    'wish-edit'(el) {
+      const id = +el.dataset.id;
+      // 从已加载的数据里取这条愿望，回填到编辑框
+      const list = (App.state.child.wishes && App.state.child.wishes.wishes)
+                || (App.state.child.home && App.state.child.home.wishes) || [];
+      const w = list.find(x => x.id === id) || {};
+      UI.sheet({
+        title: '编辑愿望',
+        body: `
+          <label class="f"><span>我想实现什么</span><input id="wTitle" value="${UI.esc(w.title || '')}"></label>
+          <label class="f"><span>备注（可选）</span><textarea id="wNote">${UI.esc(w.note || '')}</textarea></label>
+          <div class="row spread">
+            <span class="small muted">配图（可选）</span>
+            <button class="btn ghost sm" data-act="wish-photo">📷 上传照片</button>
+          </div>
+          <div id="wPreview" style="margin-top:8px">${w.cover ? `<img src="${UI.esc(w.cover)}" style="width:100%;border-radius:12px">` : ''}</div>
+          <input type="hidden" id="wCover" value="${UI.esc(w.cover || '')}">
+          <label class="f" style="margin-top:10px"><span>目标日期（可选）</span><input id="wDate" type="date" value="${UI.esc(w.target_date || '')}"></label>
+          <p class="small muted" style="margin-top:8px">星星币由爸爸妈妈定，这里改不了。只能改名字、备注和配图。</p>`,
+        okText: '保存',
+        onOk: async (wrap) => {
+          const title = wrap.querySelector('#wTitle').value.trim();
+          if (!title) { UI.toast('给它起个名字吧', 'err'); return false; }
+          try {
+            await API.put('/api/child/wish/' + id, {
+              title,
+              note: wrap.querySelector('#wNote').value.trim(),
+              cover_image: wrap.querySelector('#wCover').value,
+              target_date: wrap.querySelector('#wDate').value || null
+            });
+            UI.toast('愿望已更新 🌈');
+            App.load();
+          } catch (e) { UI.toast(e.message, 'err'); }
+        }
+      });
     },
 
     async 'redeem'(el) {

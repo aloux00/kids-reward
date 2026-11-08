@@ -240,7 +240,7 @@ class TaskIn(BaseModel):
     points: int = 5
     icon: str = "✅"
     repeat_type: str = "daily"          # daily / weekly / none
-    repeat_rule: str = "[]"             # weekly 时为周几 [1..7]
+    repeat_rule: list = []              # weekly 时为周几 [1..7]
     assignee_ids: list = []
     display_zone: str = "today"         # today / extra
     need_approval: bool = True
@@ -380,6 +380,7 @@ def list_all_wishes(parent: User = Depends(require_parent), db: Session = Depend
                 "priced": w.cost_coin > 0,
                 "note": w.note,
                 "status": w.status,
+                "target_date": w.target_date or "",
                 "is_primary": w.priority == 1,
                 "created_at": w.created_at.strftime("%m-%d %H:%M"),
             }
@@ -388,35 +389,82 @@ def list_all_wishes(parent: User = Depends(require_parent), db: Session = Depend
     }
 
 
-class WishCostIn(BaseModel):
-    """家长给愿望定价。确认前后都能改。"""
+class WishEditIn(BaseModel):
+    """家长编辑愿望：可以只改内容，也可以只改价，或一起改。
 
-    cost_coin: int
+    确认前(pending)改价即视作通过；确认后改价只是调价。
+    """
+
+    cost_coin: int | None = None
+    title: str | None = None
+    note: str | None = None
+    cover_image: str | None = None
+    target_date: str | None = None
 
 
 @router.patch("/wish/{wish_id}")
-def set_wish_cost(wish_id: int, body: WishCostIn,
-                  parent: User = Depends(require_parent),
-                  db: Session = Depends(get_db)):
+def edit_wish(wish_id: int, body: WishEditIn,
+              parent: User = Depends(require_parent),
+              db: Session = Depends(get_db)):
     w = db.get(Wish, wish_id)
     if not w or w.family_id != parent.family_id:
         raise HTTPException(404, "愿望不存在")
     if w.status in ("completed", "abandoned"):
         raise HTTPException(400, "这个愿望已经结束了，改不了啦")
-    if int(body.cost_coin) < 1:
-        raise HTTPException(400, "星星币数量要是大于 0 的整数")
 
-    old = w.cost_coin
-    w.cost_coin = int(body.cost_coin)
-    if w.status == "pending":
-        # 定价即视作通过：孩子已经许了愿，家长给了价，没必要再走一次确认
-        w.status = "active"
-        add_audit(db, parent.family_id, parent.id, "approve_wish", "wish", w.id, w.title)
-    else:
-        add_audit(db, parent.family_id, parent.id, "reprice_wish", "wish", w.id,
-                  f"{old}→{w.cost_coin}")
+    # —— 内容字段：有传才改，缺省不动 ——
+    if body.title is not None:
+        t = body.title.strip()
+        if not t:
+            raise HTTPException(400, "标题不能为空")
+        w.title = t[:40]
+    if body.note is not None:
+        w.note = body.note[:200]
+    if body.cover_image is not None:
+        w.cover_image = body.cover_image
+    if body.target_date is not None:
+        w.target_date = body.target_date or None
+
+    # —— 价格字段：有传才改并走审批/调价逻辑 ——
+    if body.cost_coin is not None:
+        if int(body.cost_coin) < 1:
+            raise HTTPException(400, "星星币数量要是大于 0 的整数")
+        old = w.cost_coin
+        w.cost_coin = int(body.cost_coin)
+        if w.status == "pending":
+            # 定价即视作通过：孩子已经许了愿，家长给了价，没必要再走一次确认
+            w.status = "active"
+            add_audit(db, parent.family_id, parent.id, "approve_wish", "wish", w.id, w.title)
+        else:
+            add_audit(db, parent.family_id, parent.id, "reprice_wish", "wish", w.id,
+                      f"{old}→{w.cost_coin}")
+
     db.commit()
     return {"ok": True, "cost": w.cost_coin, "status": w.status}
+
+
+@router.delete("/wish/{wish_id}")
+def delete_wish(wish_id: int,
+                parent: User = Depends(require_parent),
+                db: Session = Depends(get_db)):
+    """家长彻底删除一个愿望（含其兑换申请）。
+
+    不是软删除：行直接移除，列表里就不再出现。已实现的愿望也能删，
+    只是会连同一并清掉它的兑换记录 —— 星星币流水(coin ledger)不受影响，
+    孩子的账户余额不会错乱。
+    """
+    w = db.get(Wish, wish_id)
+    if not w or w.family_id != parent.family_id:
+        raise HTTPException(404, "愿望不存在")
+    # 先清掉外键指向它的兑换申请，否则 SQLite 外键约束会拦删除
+    for r in db.scalars(
+        select(Redemption).where(Redemption.wish_id == wish_id)
+    ).all():
+        db.delete(r)
+    add_audit(db, parent.family_id, parent.id, "delete_wish", "wish", w.id, w.title)
+    db.delete(w)
+    db.commit()
+    return {"ok": True}
 
 
 class WishReviewIn(BaseModel):

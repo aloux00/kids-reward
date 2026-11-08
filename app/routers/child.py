@@ -423,6 +423,44 @@ def abandon_wish(wish_id: int, user: User = Depends(require_child),
     return {"ok": True}
 
 
+class WishEditIn(BaseModel):
+    """孩子编辑自己还没结束的愿望：改文案、配图、目标日期都行。
+
+    不能改星星币（那是家长定的），也不能改已确认/已实现/已放弃的。
+    """
+
+    title: str | None = None
+    note: str | None = None
+    cover_image: str | None = None
+    target_date: str | None = None
+
+
+@router.put("/wish/{wish_id}")
+def edit_wish(wish_id: int, body: WishEditIn,
+              user: User = Depends(require_child), db: Session = Depends(get_db)):
+    w = db.get(Wish, wish_id)
+    if not w or w.child_id != user.id:
+        raise HTTPException(404, "愿望不存在")
+    if w.status in ("completed", "abandoned"):
+        raise HTTPException(400, "这个愿望已经结束了，改不了啦")
+
+    if body.title is not None:
+        t = body.title.strip()
+        if not t:
+            raise HTTPException(400, "标题不能为空")
+        w.title = t[:40]
+    if body.note is not None:
+        w.note = body.note[:200]
+    if body.cover_image is not None:
+        w.cover_image = body.cover_image
+    if body.target_date is not None:
+        w.target_date = body.target_date or None
+
+    db.commit()
+    add_audit(db, user.family_id, user.id, "edit_wish", "wish", w.id, w.title)
+    return {"ok": True}
+
+
 # ------------------------------------------------------------------ 兑换
 @router.post("/redeem/{wish_id}")
 def redeem(wish_id: int, user: User = Depends(require_child),
